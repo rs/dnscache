@@ -41,15 +41,22 @@ go func() {
 If you are using an `http.Transport`, you can use this cache by specifying a `Dial` function:
 
 ```go
-transport := &http.Transport {
-  Dial: func(network string, address string) (net.Conn, error) {
-    separator := strings.LastIndex(address, ":")
-    ip, err := dnscache.LookupHost(address[:separator])
-    if err != nil {
-        return nil, err
-    }
-    return net.Dial("tcp", ip + address[separator:])
-  },
+r := &Resolver{}
+t := &http.Transport{
+    DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+        separator := strings.LastIndex(addr, ":")
+        ips, err := r.LookupHost(ctx, addr[:separator])
+        if err != nil {
+            return nil, err
+        }
+        for _, ip := range ips {
+            conn, err = net.Dial("tcp", ip+addr[separator:])
+            if err == nil {
+                break
+            }
+        }
+        return
+    },
 }
 ```
 
