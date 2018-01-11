@@ -50,7 +50,7 @@ func Example() {
 				return nil, err
 			}
 			for _, ip := range ips {
-				conn, err = net.Dial("tcp", ip+addr[separator:])
+				conn, err = net.Dial(network, ip+addr[separator:])
 				if err == nil {
 					break
 				}
