@@ -38,7 +38,7 @@ go func() {
 }()
 ```
 
-If you are using an `http.Transport`, you can use this cache by specifying a `Dial` function:
+If you are using an `http.Transport`, you can use this cache by specifying a `DialContext` function:
 
 ```go
 r := &Resolver{}
