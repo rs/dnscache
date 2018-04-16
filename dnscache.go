@@ -60,7 +60,7 @@ func (r *Resolver) Refresh(clearUnused bool) {
 	}
 	r.mu.RUnlock()
 	for _, key := range update {
-		r.update(context.Background(), key)
+		r.update(context.Background(), key, false)
 	}
 }
 
@@ -79,12 +79,12 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 		if r.onCacheMiss != nil {
 			r.onCacheMiss()
 		}
-		rrs, err = r.update(ctx, key)
+		rrs, err = r.update(ctx, key, true)
 	}
 	return
 }
 
-func (r *Resolver) update(ctx context.Context, key string) (rrs []string, err error) {
+func (r *Resolver) update(ctx context.Context, key string, used bool) (rrs []string, err error) {
 	c := lookupGroup.DoChan(key, r.lookupFunc(key))
 	select {
 	case <-ctx.Done():
@@ -110,7 +110,7 @@ func (r *Resolver) update(ctx context.Context, key string) (rrs []string, err er
 			rrs, _ = res.Val.([]string)
 		}
 		r.mu.Lock()
-		r.storeLocked(key, rrs, err)
+		r.storeLocked(key, rrs, used, err)
 		r.mu.Unlock()
 	}
 	return
@@ -174,17 +174,17 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	return rrs, err, true
 }
 
-func (r *Resolver) storeLocked(key string, rrs []string, err error) {
+func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 	if entry, found := r.cache[key]; found {
 		// Update existing entry in place
 		entry.rrs = rrs
 		entry.err = err
-		entry.used = true
+		entry.used = used
 		return
 	}
 	r.cache[key] = &cacheEntry{
 		rrs:  rrs,
 		err:  err,
-		used: true,
+		used: used,
 	}
 }
