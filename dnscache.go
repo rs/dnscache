@@ -74,7 +74,7 @@ var lookupGroup singleflight.Group
 
 func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err error) {
 	var found bool
-	rrs, err, found = r.loadLocked(key)
+	rrs, err, found = r.load(key)
 	if !found {
 		if r.onCacheMiss != nil {
 			r.onCacheMiss()
@@ -100,7 +100,7 @@ func (r *Resolver) update(ctx context.Context, key string) (rrs []string, err er
 			// We had concurrent lookups, check if the cache is already updated
 			// by a friend.
 			var found bool
-			rrs, err, found = r.loadLocked(key)
+			rrs, err, found = r.load(key)
 			if found {
 				return
 			}
@@ -154,7 +154,7 @@ func (r *Resolver) getCtx() (ctx context.Context, cancel context.CancelFunc) {
 	return
 }
 
-func (r *Resolver) loadLocked(key string) (rrs []string, err error, found bool) {
+func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	r.mu.RLock()
 	var entry *cacheEntry
 	entry, found = r.cache[key]
