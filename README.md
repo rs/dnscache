@@ -20,10 +20,10 @@ Create a new instance and use it in place of `net.Resolver`. New names will be c
 resolver := &dnscache.Resolver{}
 
 // First call will cache the result
-addrs, err := resolver.LookupHost("example.com")
+addrs, err := resolver.LookupHost(context.Background(), "example.com")
 
 // Subsequent calls will use the cached result
-addrs, err = resolver.LookupHost("example.com")
+addrs, err = resolver.LookupHost(context.Background(), "example.com")
 
 // Call to refresh will refresh names in cache. If you pass true, it will also
 // remove cached names not looked up since the last call to Refresh. It is a good idea
@@ -41,7 +41,7 @@ go func() {
 If you are using an `http.Transport`, you can use this cache by specifying a `DialContext` function:
 
 ```go
-r := &Resolver{}
+r := &dnscache.Resolver{}
 t := &http.Transport{DialContext: r.Dial}
 ```
 
