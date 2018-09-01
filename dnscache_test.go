@@ -2,7 +2,6 @@ package dnscache
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"testing"
@@ -41,12 +40,12 @@ func TestResolver_LookupHost(t *testing.T) {
 
 func TestClearCache(t *testing.T) {
 	r := &Resolver{}
-	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
+	r.LookupHost(context.Background(), "google.com")
+	if e := r.cache["hgoogle.com"]; e == nil || !e.used {
 		t.Error("cache entry used flag is false, want true")
 	}
 	r.Refresh(true)
-	if e := r.cache["hgoogle.com"]; e != nil && e.used {
+	if e := r.cache["hgoogle.com"]; e == nil || e.used {
 		t.Error("cache entry used flag is true, want false")
 	}
 	r.Refresh(true)
@@ -55,13 +54,19 @@ func TestClearCache(t *testing.T) {
 	}
 }
 
-func Example() {
+func TestHTTP(test *testing.T) {
 	r := &Resolver{}
 	t := &http.Transport{DialContext: r.Dial}
 	c := &http.Client{Transport: t}
 	res, err := c.Get("http://httpbin.org/status/418")
 	if err == nil {
-		fmt.Println(res.StatusCode)
+		if res.StatusCode != 418 {
+			test.Errorf("expected 418, got: %d", res.StatusCode)
+		}
+	} else {
+		test.Error(err.Error())
 	}
-	// Output: 418
+	if e := r.cache["hhttpbin.org"]; e == nil || !e.used {
+		test.Error("entry not cached")
+	}
 }
