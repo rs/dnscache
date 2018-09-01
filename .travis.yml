@@ -1,10 +1,8 @@
 language: go
 go:
-- 1.8
-- 1.9
-- tip
-matrix:
-  allow_failures:
-      - go: tip
+- 1.8.x
+- 1.9.x
+- 1.10.x
+- stable
 script:
   go test -v -race -cpu=1,2,4 -bench . -benchmem ./...
