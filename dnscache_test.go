@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 	"testing"
 )
 
@@ -58,22 +57,7 @@ func TestClearCache(t *testing.T) {
 
 func Example() {
 	r := &Resolver{}
-	t := &http.Transport{
-		DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-			separator := strings.LastIndex(addr, ":")
-			ips, err := r.LookupHost(ctx, addr[:separator])
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				conn, err = net.Dial(network, ip+addr[separator:])
-				if err == nil {
-					break
-				}
-			}
-			return
-		},
-	}
+	t := &http.Transport{DialContext: r.Dial}
 	c := &http.Client{Transport: t}
 	res, err := c.Get("http://httpbin.org/status/418")
 	if err == nil {

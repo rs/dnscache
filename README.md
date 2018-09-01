@@ -42,6 +42,14 @@ If you are using an `http.Transport`, you can use this cache by specifying a `Di
 
 ```go
 r := &Resolver{}
+t := &http.Transport{DialContext: r.Dial}
+```
+
+Please note that for now the Dial function is rather minimalistic and there are some restrictions.
+Consult godoc for limitations. If you need extra functionality, but don't want to modify the library, you can specify it inline like:
+
+```go
+r := &dnscache.Resolver{}
 t := &http.Transport{
     DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
         separator := strings.LastIndex(addr, ":")
@@ -59,4 +67,3 @@ t := &http.Transport{
     },
 }
 ```
-

@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,6 +63,27 @@ func (r *Resolver) Refresh(clearUnused bool) {
 	for _, key := range update {
 		r.update(context.Background(), key, false)
 	}
+}
+
+// Dial is a function to use in DialContext for http.Transport.
+// It looks up the host via Resolver and passes it to net.Dial.
+//
+// Be warned that this is a simplistic implementation and misses a lot of features like dual stack support,
+// correct handling of context tracing, randomization of adds etc.
+// This implementation will also choke on "unix", "unixgram" and "unixpacket" network.
+func (r *Resolver) Dial(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+	separator := strings.LastIndex(addr, ":")
+	ips, err := r.LookupHost(ctx, addr[:separator])
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		conn, err = net.Dial(network, ip+addr[separator:])
+		if err == nil {
+			break
+		}
+	}
+	return
 }
 
 func (r *Resolver) init() {
