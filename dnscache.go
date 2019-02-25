@@ -61,9 +61,11 @@ func (r *Resolver) Refresh(clearUnused bool) {
 	}
 	r.mu.RUnlock()
 
-	for _, key := range del {
+	if len(del) > 0 {
 		r.mu.Lock()
-		delete(r.cache, key)
+		for _, key := range del {
+			delete(r.cache, key)
+		}
 		r.mu.Unlock()
 	}
 
