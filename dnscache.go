@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/dnscache/internal/singleflight"
+	"golang.org/x/sync/singleflight"
 )
 
 // Resolver adds a DNS cache layer to Go's net.Resolver.

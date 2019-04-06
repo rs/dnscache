@@ -1,0 +1,13 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "VhUZFUuhLFSBFUfskMC4am5RIdc=",
+			"path": "golang.org/x/sync/singleflight",
+			"revision": "1d60e4601c6fd243af51cc01ddf169918a5407ca",
+			"revisionTime": "2018-03-14T17:21:19Z"
+		}
+	],
+	"rootPath": "github.com/chillum/dnscache"
+}

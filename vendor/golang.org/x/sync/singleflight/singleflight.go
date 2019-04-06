@@ -4,7 +4,7 @@
 
 // Package singleflight provides a duplicate function call suppression
 // mechanism.
-package singleflight
+package singleflight // import "golang.org/x/sync/singleflight"
 
 import "sync"
 
