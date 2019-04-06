@@ -53,14 +53,24 @@ func (r *Resolver) Refresh(clearUnused bool) {
 	r.once.Do(r.init)
 	r.mu.RLock()
 	update := make([]string, 0, len(r.cache))
+	del := make([]string, 0, len(r.cache))
 	for key, entry := range r.cache {
 		if entry.used {
 			update = append(update, key)
 		} else if clearUnused {
-			delete(r.cache, key)
+			del = append(del, key)
 		}
 	}
 	r.mu.RUnlock()
+
+	if len(del) > 0 {
+		r.mu.Lock()
+		for _, key := range del {
+			delete(r.cache, key)
+		}
+		r.mu.Unlock()
+	}
+
 	for _, key := range update {
 		r.update(context.Background(), key, false)
 	}

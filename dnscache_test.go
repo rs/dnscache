@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestResolver_LookupHost(t *testing.T) {
@@ -52,6 +53,42 @@ func TestClearCache(t *testing.T) {
 	if e := r.cache["hgoogle.com"]; e != nil {
 		t.Error("cache entry is not cleared")
 	}
+}
+
+func TestRaceOnDelete(t *testing.T) {
+	r := &Resolver{}
+	ls := make(chan bool)
+	rs := make(chan bool)
+
+	go func() {
+		for {
+			select {
+			case <-ls:
+				return
+			default:
+				r.LookupHost(context.Background(), "google.com")
+				time.Sleep(2 * time.Millisecond)
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-rs:
+				return
+			default:
+				r.Refresh(true)
+				time.Sleep(time.Millisecond)
+			}
+		}
+	}()
+
+	time.Sleep(1 * time.Second)
+
+	ls <- true
+	rs <- true
+
 }
 
 func TestHTTP(test *testing.T) {
