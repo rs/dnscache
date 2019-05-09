@@ -2,18 +2,15 @@ package dnscache
 
 import (
 	"context"
-	"fmt"
 	"net"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 )
 
 func TestResolver_LookupHost(t *testing.T) {
-	r := &Resolver{}
+	r := NewDNSCache(net.DefaultResolver)
 	var cacheMiss bool
-	r.onCacheMiss = func() {
+	r.OnCacheMiss = func() {
 		cacheMiss = true
 	}
 	hosts := []string{"google.com", "google.com.", "netflix.com"}
@@ -42,7 +39,7 @@ func TestResolver_LookupHost(t *testing.T) {
 }
 
 func TestClearCache(t *testing.T) {
-	r := &Resolver{}
+	r := NewDNSCache(net.DefaultResolver)
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
 		t.Error("cache entry used flag is false, want true")
@@ -58,7 +55,7 @@ func TestClearCache(t *testing.T) {
 }
 
 func TestRaceOnDelete(t *testing.T) {
-	r := &Resolver{}
+	r := NewDNSCache(net.DefaultResolver)
 	ls := make(chan bool)
 	rs := make(chan bool)
 
@@ -91,30 +88,4 @@ func TestRaceOnDelete(t *testing.T) {
 	ls <- true
 	rs <- true
 
-}
-
-func Example() {
-	r := &Resolver{}
-	t := &http.Transport{
-		DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-			separator := strings.LastIndex(addr, ":")
-			ips, err := r.LookupHost(ctx, addr[:separator])
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				conn, err = net.Dial(network, ip+addr[separator:])
-				if err == nil {
-					break
-				}
-			}
-			return
-		},
-	}
-	c := &http.Client{Transport: t}
-	res, err := c.Get("http://httpbin.org/status/418")
-	if err == nil {
-		fmt.Println(res.StatusCode)
-	}
-	// Output: 418
 }

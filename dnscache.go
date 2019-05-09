@@ -6,8 +6,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/dnscache/internal/singleflight"
+	"golang.org/x/sync/singleflight"
 )
+
+type DNSResolver interface {
+	LookupHost(ctx context.Context, host string) (addrs []string, err error)
+	LookupAddr(ctx context.Context, addr string) (names []string, err error)
+}
 
 type Resolver struct {
 	// Timeout defines the maximum allowed time allowed for a lookup.
@@ -15,19 +20,30 @@ type Resolver struct {
 
 	// Resolver is the net.Resolver used to perform actual DNS lookup. If nil,
 	// net.DefaultResolver is used instead.
-	Resolver *net.Resolver
+	Resolver DNSResolver
 
 	once  sync.Once
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
 
-	onCacheMiss func()
+	OnCacheMiss func()
 }
 
 type cacheEntry struct {
 	rrs  []string
 	err  error
 	used bool
+}
+
+func NewDNSCache(defaultResolver DNSResolver) Resolver {
+	return Resolver{
+		Resolver: func() (r DNSResolver) {
+			if r = defaultResolver; r == nil {
+				r = net.DefaultResolver
+			}
+			return
+		}(),
+	}
 }
 
 // LookupAddr performs a reverse lookup for the given address, returning a list
@@ -86,8 +102,8 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 	var found bool
 	rrs, err, found = r.load(key)
 	if !found {
-		if r.onCacheMiss != nil {
-			r.onCacheMiss()
+		if r.OnCacheMiss != nil {
+			r.OnCacheMiss()
 		}
 		rrs, err = r.update(ctx, key, true)
 	}
@@ -132,22 +148,19 @@ func (r *Resolver) lookupFunc(key string) func() (interface{}, error) {
 	if len(key) == 0 {
 		panic("lookupFunc with empty key")
 	}
-	resolver := net.DefaultResolver
-	if r.Resolver != nil {
-		resolver = r.Resolver
-	}
+
 	switch key[0] {
 	case 'h':
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return resolver.LookupHost(ctx, key[1:])
+			return r.Resolver.LookupHost(ctx, key[1:])
 		}
 	case 'r':
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return resolver.LookupAddr(ctx, key[1:])
+			return r.Resolver.LookupAddr(ctx, key[1:])
 		}
 	default:
 		panic("lookupFunc invalid key type: " + key)
