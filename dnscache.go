@@ -35,6 +35,7 @@ type cacheEntry struct {
 	used bool
 }
 
+// NewDNSCache creates an new instance of the DNSCache
 func NewDNSCache(defaultResolver DNSResolver) Resolver {
 	return Resolver{
 		Resolver: func() (r DNSResolver) {
@@ -149,18 +150,24 @@ func (r *Resolver) lookupFunc(key string) func() (interface{}, error) {
 		panic("lookupFunc with empty key")
 	}
 
+	// Deprecated check of the resolver attribute. Use the constructor to execute the check only once.
+	var resolver DNSResolver = net.DefaultResolver
+	if r.Resolver != nil {
+		resolver = r.Resolver
+	}
+
 	switch key[0] {
 	case 'h':
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return r.Resolver.LookupHost(ctx, key[1:])
+			return resolver.LookupHost(ctx, key[1:])
 		}
 	case 'r':
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return r.Resolver.LookupAddr(ctx, key[1:])
+			return resolver.LookupAddr(ctx, key[1:])
 		}
 	default:
 		panic("lookupFunc invalid key type: " + key)
