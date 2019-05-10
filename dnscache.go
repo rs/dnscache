@@ -140,8 +140,9 @@ func (r *Resolver) lookupFunc(key string) func() (interface{}, error) {
 		panic("lookupFunc with empty key")
 	}
 
+	var resolver DNSResolver = net.DefaultResolver
 	if r.Resolver != nil {
-		r.Resolver = net.DefaultResolver
+		resolver = r.Resolver
 	}
 
 	switch key[0] {
@@ -149,13 +150,13 @@ func (r *Resolver) lookupFunc(key string) func() (interface{}, error) {
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return r.Resolver.LookupHost(ctx, key[1:])
+			return resolver.LookupHost(ctx, key[1:])
 		}
 	case 'r':
 		return func() (interface{}, error) {
 			ctx, cancel := r.getCtx()
 			defer cancel()
-			return r.Resolver.LookupAddr(ctx, key[1:])
+			return resolver.LookupAddr(ctx, key[1:])
 		}
 	default:
 		panic("lookupFunc invalid key type: " + key)
