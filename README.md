@@ -21,7 +21,7 @@ go get -u github.com/rs/dnscache
 Create a new instance and use it in place of `net.Resolver`. New names will be cached. Call the `Refresh` method at regular interval to update cached entries and cleanup unused ones.
 
 ```go
-resolver := dnscache.New(net.DefaultResolver)
+resolver := &dnscache.Resolver{}
 
 // First call will cache the result
 addrs, err := resolver.LookupHost(context.Background(), "example.com")
@@ -42,7 +42,7 @@ go func() {
 If you are using an `http.Transport`, you can use this cache by specifying a `DialContext` function:
 
 ```go
-r := dnscache.New(net.DefaultResolver)
+r := &dnscache.Resolver{}
 t := &http.Transport{
     DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
         separator := strings.LastIndex(addr, ":")

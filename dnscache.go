@@ -37,18 +37,6 @@ type cacheEntry struct {
 	used bool
 }
 
-// New creates an new instance of the DNSCache
-func New(defaultResolver DNSResolver) *Resolver {
-	return &Resolver{
-		Resolver: func() (r DNSResolver) {
-			if r = defaultResolver; r == nil {
-				r = net.DefaultResolver
-			}
-			return
-		}(),
-	}
-}
-
 // LookupAddr performs a reverse lookup for the given address, returning a list
 // of names mapping to that address.
 func (r *Resolver) LookupAddr(ctx context.Context, addr string) (names []string, err error) {
