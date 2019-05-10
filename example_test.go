@@ -9,7 +9,7 @@ import (
 )
 
 func Example() {
-	r := NewDNSCache(net.DefaultResolver)
+	r := New(net.DefaultResolver)
 	t := &http.Transport{
 		DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
 			separator := strings.LastIndex(addr, ":")

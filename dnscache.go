@@ -18,7 +18,7 @@ type Resolver struct {
 	// Timeout defines the maximum allowed time allowed for a lookup.
 	Timeout time.Duration
 
-	// Resolver is the net.Resolver used to perform actual DNS lookup. If nil,
+	// Resolver is used to perform actual DNS lookup. If nil,
 	// net.DefaultResolver is used instead.
 	Resolver DNSResolver
 
@@ -26,6 +26,8 @@ type Resolver struct {
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
 
+	// OnCacheMiss is executed if the host or address is not included in
+	// the cache and the default lookup is executed.
 	OnCacheMiss func()
 }
 
@@ -35,8 +37,8 @@ type cacheEntry struct {
 	used bool
 }
 
-// NewDNSCache creates an new instance of the DNSCache
-func NewDNSCache(defaultResolver DNSResolver) Resolver {
+// New creates an new instance of the DNSCache
+func New(defaultResolver DNSResolver) Resolver {
 	return Resolver{
 		Resolver: func() (r DNSResolver) {
 			if r = defaultResolver; r == nil {

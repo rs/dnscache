@@ -1,4 +1,4 @@
-module github.com/am3o/dnscache
+module github.com/rs/dnscache
 
 go 1.12
 
