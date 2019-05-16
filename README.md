@@ -33,7 +33,9 @@ addrs, err = resolver.LookupHost(context.Background(), "example.com")
 // remove cached names not looked up since the last call to Refresh. It is a good idea
 // to call this method on a regular interval.
 go func() {
-    for range time.NewTicker(5 * time.Minute).C {
+    t := time.NewTicker(5 * time.Minute)
+    defer t.Stop()
+    for range t.C {
         resolver.Refresh(true)
     }
 }()
