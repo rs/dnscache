@@ -1,6 +1,10 @@
 # DNS Lookup Cache
 
-[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/dnscache) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/dnscache/master/LICENSE) [![Build Status](https://travis-ci.org/rs/dnscache.svg?branch=master)](https://travis-ci.org/rs/dnscache) [![Coverage](http://gocover.io/_badge/github.com/rs/dnscache)](http://gocover.io/github.com/rs/dnscache)
+[![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/dnscache/master/LICENSE) 
+[![Go Report Card](https://goreportcard.com/badge/github.com/rs/dnscache)](https://goreportcard.com/report/github.com/rs/dnscache) 
+[![Build Status](https://travis-ci.org/rs/dnscache.svg?branch=master)](https://travis-ci.org/rs/dnscache) 
+[![Coverage](http://gocover.io/_badge/github.com/rs/dnscache)](http://gocover.io/github.com/rs/dnscache)
+[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/dnscache) 
 
 The dnscache package provides a DNS cache layer to Go's `net.Resolver`.
 
@@ -9,7 +13,7 @@ The dnscache package provides a DNS cache layer to Go's `net.Resolver`.
 Install using the "go get" command:
 
 ```
-go get github.com/rs/dnscache
+go get -u github.com/rs/dnscache
 ```
 
 # Usage
@@ -20,20 +24,19 @@ Create a new instance and use it in place of `net.Resolver`. New names will be c
 resolver := &dnscache.Resolver{}
 
 // First call will cache the result
-addrs, err := resolver.LookupHost("example.com")
+addrs, err := resolver.LookupHost(context.Background(), "example.com")
 
 // Subsequent calls will use the cached result
-addrs, err = resolver.LookupHost("example.com")
+addrs, err = resolver.LookupHost(context.Background(), "example.com")
 
 // Call to refresh will refresh names in cache. If you pass true, it will also
 // remove cached names not looked up since the last call to Refresh. It is a good idea
 // to call this method on a regular interval.
 go func() {
-    clearUnused := true
     t := time.NewTicker(5 * time.Minute)
     defer t.Stop()
     for range t.C {
-        resolver.Refresh(clearUnused)
+        resolver.Refresh(true)
     }
 }()
 ```
@@ -41,7 +44,7 @@ go func() {
 If you are using an `http.Transport`, you can use this cache by specifying a `DialContext` function:
 
 ```go
-r := &Resolver{}
+r := &dnscache.Resolver{}
 t := &http.Transport{
     DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
         separator := strings.LastIndex(addr, ":")

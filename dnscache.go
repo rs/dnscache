@@ -6,22 +6,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/dnscache/internal/singleflight"
+	"golang.org/x/sync/singleflight"
 )
+
+type DNSResolver interface {
+	LookupHost(ctx context.Context, host string) (addrs []string, err error)
+	LookupAddr(ctx context.Context, addr string) (names []string, err error)
+}
 
 type Resolver struct {
 	// Timeout defines the maximum allowed time allowed for a lookup.
 	Timeout time.Duration
 
-	// Resolver is the net.Resolver used to perform actual DNS lookup. If nil,
+	// Resolver is used to perform actual DNS lookup. If nil,
 	// net.DefaultResolver is used instead.
-	Resolver *net.Resolver
+	Resolver DNSResolver
 
 	once  sync.Once
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
 
-	onCacheMiss func()
+	// OnCacheMiss is executed if the host or address is not included in
+	// the cache and the default lookup is executed.
+	OnCacheMiss func()
 }
 
 type cacheEntry struct {
@@ -86,8 +93,8 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 	var found bool
 	rrs, err, found = r.load(key)
 	if !found {
-		if r.onCacheMiss != nil {
-			r.onCacheMiss()
+		if r.OnCacheMiss != nil {
+			r.OnCacheMiss()
 		}
 		rrs, err = r.update(ctx, key, true)
 	}
@@ -132,10 +139,12 @@ func (r *Resolver) lookupFunc(key string) func() (interface{}, error) {
 	if len(key) == 0 {
 		panic("lookupFunc with empty key")
 	}
-	resolver := net.DefaultResolver
+
+	var resolver DNSResolver = net.DefaultResolver
 	if r.Resolver != nil {
 		resolver = r.Resolver
 	}
+
 	switch key[0] {
 	case 'h':
 		return func() (interface{}, error) {
