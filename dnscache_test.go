@@ -89,3 +89,30 @@ func TestRaceOnDelete(t *testing.T) {
 	rs <- true
 
 }
+
+func TestCacheFailTimeout(t *testing.T) {
+	resolveCalls := 0
+	mainResolver := net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			resolveCalls++
+			return net.Dial(network, address)
+		},
+	}
+	r := &Resolver{
+		CacheFailDuration: 10 * time.Millisecond,
+		Resolver:          &mainResolver,
+	}
+	_, err := r.LookupHost(context.Background(), "example.notexisting")
+	assert.NotNil(t, err)
+	_, err = r.LookupHost(context.Background(), "example.notexisting")
+	assert.NotNil(t, err)
+
+	assert.Equal(t, 4, resolveCalls)
+
+	time.Sleep(10 * time.Millisecond)
+
+	_, err = r.LookupHost(context.Background(), "example.notexisting")
+	assert.NotNil(t, err)
+	assert.Equal(t, 8, resolveCalls)
+}

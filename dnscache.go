@@ -22,6 +22,10 @@ type Resolver struct {
 	// net.DefaultResolver is used instead.
 	Resolver DNSResolver
 
+	// Duration for errors to be cached
+	// Default is 1s
+	CacheFailDuration time.Duration
+
 	once  sync.Once
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
@@ -32,9 +36,10 @@ type Resolver struct {
 }
 
 type cacheEntry struct {
-	rrs  []string
-	err  error
-	used bool
+	rrs     []string
+	err     error
+	used    bool
+	created time.Time
 }
 
 // LookupAddr performs a reverse lookup for the given address, returning a list
@@ -83,6 +88,10 @@ func (r *Resolver) Refresh(clearUnused bool) {
 
 func (r *Resolver) init() {
 	r.cache = make(map[string]*cacheEntry)
+
+	if r.CacheFailDuration == 0 {
+		r.CacheFailDuration = 1 * time.Second
+	}
 }
 
 // lookupGroup merges lookup calls together for lookups for the same host. The
@@ -185,6 +194,11 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	err = entry.err
 	used := entry.used
 	r.mu.RUnlock()
+
+	if err != nil && time.Now().Sub(entry.created) > r.CacheFailDuration {
+		return []string{}, nil, false
+	}
+
 	if !used {
 		r.mu.Lock()
 		entry.used = true
@@ -202,8 +216,9 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 		return
 	}
 	r.cache[key] = &cacheEntry{
-		rrs:  rrs,
-		err:  err,
-		used: used,
+		rrs:     rrs,
+		err:     err,
+		used:    used,
+		created: time.Now(),
 	}
 }
