@@ -8,7 +8,7 @@ import (
 )
 
 func Example() {
-	r := &Resolver{}
+	r := New(true, true, true)
 	t := &http.Transport{
 		DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
 			host, port, err := net.SplitHostPort(addr)

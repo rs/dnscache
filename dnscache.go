@@ -22,13 +22,27 @@ type Resolver struct {
 	// net.DefaultResolver is used instead.
 	Resolver DNSResolver
 
-	once  sync.Once
+	concurrentLookups bool
+
+	saveErrors bool
+
+	saveEmpty bool
+
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
 
 	// OnCacheMiss is executed if the host or address is not included in
 	// the cache and the default lookup is executed.
 	OnCacheMiss func()
+}
+
+func New(concurrentLookups, saveErrors, saveEmpty  bool) *Resolver {
+	r := new(Resolver)
+	r.concurrentLookups = concurrentLookups
+	r.saveErrors = saveErrors
+	r.saveEmpty = saveEmpty
+	r.cache = make(map[string]*cacheEntry)
+	return r
 }
 
 type cacheEntry struct {
@@ -40,14 +54,12 @@ type cacheEntry struct {
 // LookupAddr performs a reverse lookup for the given address, returning a list
 // of names mapping to that address.
 func (r *Resolver) LookupAddr(ctx context.Context, addr string) (names []string, err error) {
-	r.once.Do(r.init)
 	return r.lookup(ctx, "r"+addr)
 }
 
 // LookupHost looks up the given host using the local resolver. It returns a
 // slice of that host's addresses.
 func (r *Resolver) LookupHost(ctx context.Context, host string) (addrs []string, err error) {
-	r.once.Do(r.init)
 	return r.lookup(ctx, "h"+host)
 }
 
@@ -55,7 +67,6 @@ func (r *Resolver) LookupHost(ctx context.Context, host string) (addrs []string,
 // last Refresh. If clearUnused is true, entries which hasn't be used since the
 // last Refresh are removed from the cache.
 func (r *Resolver) Refresh(clearUnused bool) {
-	r.once.Do(r.init)
 	r.mu.RLock()
 	update := make([]string, 0, len(r.cache))
 	del := make([]string, 0, len(r.cache))
@@ -77,12 +88,37 @@ func (r *Resolver) Refresh(clearUnused bool) {
 	}
 
 	for _, key := range update {
-		r.update(context.Background(), key, false)
+		if r.concurrentLookups {
+			r.concurrentUpdate(context.Background(), key, false)
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), r.Timeout)
+			r.update(ctx, key, false)
+			cancel()
+		}
 	}
 }
 
-func (r *Resolver) init() {
-	r.cache = make(map[string]*cacheEntry)
+func (r *Resolver) MarkAndSweep() {
+	r.mu.RLock()
+	update := make([]string, 0, len(r.cache))
+	del := make([]string, 0, len(r.cache))
+	for key, entry := range r.cache {
+		if entry.used {
+			update = append(update, key)
+		} else {
+			del = append(del, key)
+		}
+	}
+	r.mu.RUnlock()
+
+	r.mu.Lock()
+	for _, key := range del {
+		delete(r.cache, key)
+	}
+	for _, key := range update {
+		r.cache[key].used = false
+	}
+	r.mu.Unlock()
 }
 
 // lookupGroup merges lookup calls together for lookups for the same host. The
@@ -96,12 +132,30 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 		if r.OnCacheMiss != nil {
 			r.OnCacheMiss()
 		}
-		rrs, err = r.update(ctx, key, true)
+		if r.concurrentLookups {
+			rrs, err = r.concurrentUpdate(ctx, key, true)
+		} else {
+			rrs, err = r.update(ctx, key, true)
+		}
 	}
 	return
 }
 
 func (r *Resolver) update(ctx context.Context, key string, used bool) (rrs []string, err error) {
+	rrs, err = r.doLookup(ctx, key)
+	if !r.saveErrors && err != nil {
+		return
+	}
+	if !r.saveEmpty && len(rrs) == 0 {
+		return
+	}
+	r.mu.Lock()
+	r.storeLocked(key, rrs, used, err)
+	r.mu.Unlock()
+	return
+}
+
+func (r *Resolver) concurrentUpdate(ctx context.Context, key string, used bool) (rrs []string, err error) {
 	c := lookupGroup.DoChan(key, r.lookupFunc(key))
 	select {
 	case <-ctx.Done():
@@ -131,6 +185,26 @@ func (r *Resolver) update(ctx context.Context, key string, used bool) (rrs []str
 		r.mu.Unlock()
 	}
 	return
+}
+
+func (r *Resolver) doLookup(ctx context.Context, key string) ([]string, error) {
+	if len(key) == 0 {
+		panic("lookupFunc with empty key")
+	}
+
+	var resolver DNSResolver = net.DefaultResolver
+	if r.Resolver != nil {
+		resolver = r.Resolver
+	}
+
+	switch key[0] {
+	case 'h':
+		return resolver.LookupHost(ctx, key[1:])
+	case 'r':
+		return resolver.LookupAddr(ctx, key[1:])
+	default:
+		panic("lookupFunc invalid key type: " + key)
+	}
 }
 
 // lookupFunc returns lookup function for key. The type of the key is stored as
