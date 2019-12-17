@@ -108,13 +108,15 @@ func TestCacheFailTimeout(t *testing.T) {
 	if err == nil {
 		t.Error("first lookup should have error")
 	}
+	initialCallCount := resolveCalls
+
 	_, err = r.LookupHost(context.Background(), "example.notexisting")
 	if err == nil {
 		t.Error("second lookup should have error")
 	}
 
-	if resolveCalls != 4 {
-		t.Errorf("should have 4 resolve calls, got %d", resolveCalls)
+	if resolveCalls != initialCallCount {
+		t.Errorf("should have %d resolve calls, got %d", initialCallCount, resolveCalls)
 	}
 
 	time.Sleep(10 * time.Millisecond)
@@ -123,7 +125,7 @@ func TestCacheFailTimeout(t *testing.T) {
 	if err == nil {
 		t.Error("post cache timeout lookup should have error")
 	}
-	if resolveCalls != 8 {
-		t.Errorf("should have 8 resolve calls, got %d", resolveCalls)
+	if resolveCalls <= initialCallCount {
+		t.Errorf("should have more than %d calls", initialCallCount)
 	}
 }
