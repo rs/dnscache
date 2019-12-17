@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -91,11 +92,11 @@ func TestRaceOnDelete(t *testing.T) {
 }
 
 func TestCacheFailTimeout(t *testing.T) {
-	resolveCalls := 0
+	resolveCalls := int32(0)
 	mainResolver := net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			resolveCalls++
+			atomic.AddInt32(&resolveCalls, 1)
 			return net.Dial(network, address)
 		},
 	}
