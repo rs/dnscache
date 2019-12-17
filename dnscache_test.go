@@ -2,6 +2,7 @@ package dnscache
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -91,32 +92,42 @@ func TestRaceOnDelete(t *testing.T) {
 
 }
 
+type fakeResolver struct {
+	LookupHostCalls int32
+	LookupAddrCalls int32
+}
+
+func (f *fakeResolver) LookupHost(ctx context.Context, host string) (addrs []string, err error) {
+	atomic.AddInt32(&f.LookupHostCalls, 1)
+	return nil, errors.New("not implemented")
+}
+func (f *fakeResolver) LookupAddr(ctx context.Context, addr string) (names []string, err error) {
+	atomic.AddInt32(&f.LookupAddrCalls, 1)
+	return nil, errors.New("not implemented")
+}
+
 func TestCacheFailTimeout(t *testing.T) {
-	resolveCalls := int32(0)
-	mainResolver := net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			atomic.AddInt32(&resolveCalls, 1)
-			return net.Dial(network, address)
-		},
-	}
+	spy := fakeResolver{}
 	r := &Resolver{
 		CacheFailDuration: 10 * time.Millisecond,
-		Resolver:          &mainResolver,
+		Resolver:          &spy,
 	}
 	_, err := r.LookupHost(context.Background(), "example.notexisting")
 	if err == nil {
 		t.Error("first lookup should have error")
 	}
-	initialCallCount := resolveCalls
+	initialCallCount := spy.LookupHostCalls
+	if initialCallCount == 0 {
+		t.Error("there should be a dns lookup")
+	}
 
 	_, err = r.LookupHost(context.Background(), "example.notexisting")
 	if err == nil {
 		t.Error("second lookup should have error")
 	}
 
-	if resolveCalls != initialCallCount {
-		t.Errorf("should have %d resolve calls, got %d", initialCallCount, resolveCalls)
+	if spy.LookupHostCalls != initialCallCount {
+		t.Errorf("should have %d resolve calls, got %d", initialCallCount, spy.LookupHostCalls)
 	}
 
 	time.Sleep(10 * time.Millisecond)
@@ -125,7 +136,7 @@ func TestCacheFailTimeout(t *testing.T) {
 	if err == nil {
 		t.Error("post cache timeout lookup should have error")
 	}
-	if resolveCalls <= initialCallCount {
+	if spy.LookupHostCalls <= initialCallCount {
 		t.Errorf("should have more than %d calls", initialCallCount)
 	}
 }
