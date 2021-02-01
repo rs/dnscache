@@ -52,6 +52,36 @@ func TestClearCache(t *testing.T) {
 	if e := r.cache["hgoogle.com"]; e != nil {
 		t.Error("cache entry is not cleared")
 	}
+
+        options := ResolverRefreshOptions{}
+        options.ClearUnused = true
+        options.PersistOnFailure = false
+	_, _ = r.LookupHost(context.Background(), "google.com")
+	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
+		t.Error("cache entry used flag is false, want true")
+	}
+	r.RefreshWithOptions(options)
+	if e := r.cache["hgoogle.com"]; e != nil && e.used {
+		t.Error("cache entry used flag is true, want false")
+	}
+	r.RefreshWithOptions(options)
+	if e := r.cache["hgoogle.com"]; e != nil {
+		t.Error("cache entry is not cleared")
+	}
+
+        options.ClearUnused = false
+        options.PersistOnFailure = true
+        br := &Resolver{}
+        br.Resolver = BadResolver{}
+
+        _, _ = br.LookupHost(context.Background(), "google.com")
+        br.Resolver = BadResolver{choke: true}
+        br.RefreshWithOptions(options)
+        if len(br.cache["hgoogle.com"].rrs) == 0 {
+                t.Error("cache entry is cleared")
+        }
+
+
 }
 
 func TestRaceOnDelete(t *testing.T) {
