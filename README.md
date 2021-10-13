@@ -47,14 +47,14 @@ If you are using an `http.Transport`, you can use this cache by specifying a `Di
 r := &dnscache.Resolver{}
 t := &http.Transport{
     DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-        host, port, err := net.SplitHostPort(addr)
+        // addr has form host:port and the port is 80 by default
+        colonPos := strings.LastIndexByte(addr, ':')
+        host := addr[:colonPos]
+        ips, err := resolver.LookupHost(ctx, host)
         if err != nil {
             return nil, err
         }
-        ips, err := r.LookupHost(ctx, host)
-        if err != nil {
-            return nil, err
-        }
+        port := addr[colonPos + 1:]
         for _, ip := range ips {
             var dialer net.Dialer
             conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
