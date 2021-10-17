@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -229,4 +230,28 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 		err:  err,
 		used: used,
 	}
+}
+
+// DialContext is a ready to use function to set inti DialContext of http.Transport
+//  resolver := &dnscache.Resolver{}
+//  t := http.Transport{
+//    DialContext: resolver.DialContext,
+//  }
+func (r *Resolver) DialContext(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+	// addr has form host:port and the port is always present
+	colonPos := strings.LastIndexByte(addr, ':')
+	host := addr[:colonPos]
+	ips, err := r.LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	port := addr[colonPos+1:]
+	for _, ip := range ips {
+		var dialer net.Dialer
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+		if err == nil {
+			break
+		}
+	}
+	return
 }
