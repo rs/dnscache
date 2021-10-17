@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,14 +238,14 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 //    DialContext: resolver.DialContext,
 //  }
 func (r *Resolver) DialContext(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
+	// addr has form host:port and the port is always present
+	colonPos := strings.LastIndexByte(addr, ':')
+	host := addr[:colonPos]
 	ips, err := r.LookupHost(ctx, host)
 	if err != nil {
 		return nil, err
 	}
+	port := addr[colonPos+1:]
 	for _, ip := range ips {
 		var dialer net.Dialer
 		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
