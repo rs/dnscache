@@ -230,3 +230,27 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 		used: used,
 	}
 }
+
+// DialContext is a ready to use function to set inti DialContext of http.Transport
+//  resolver := &dnscache.Resolver{}
+//  t := http.Transport{
+//    DialContext: resolver.DialContext,
+//  }
+func (r *Resolver) DialContext(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := r.LookupHost(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		var dialer net.Dialer
+		conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
+		if err == nil {
+			break
+		}
+	}
+	return
+}

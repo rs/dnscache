@@ -66,6 +66,13 @@ t := &http.Transport{
     },
 }
 ```
+Or instead you can use `dnscache.Resolver.DialContext()` function which works the same:
+```go
+r := &dnscache.Resolver{}
+t := &http.Transport{
+    DialContext: r.DialContext,
+}
+```
 
 If addition to the `Refresh` method, you can `RefreshWithOptions`. This method adds an option to persist resource records
 on failed lookups
