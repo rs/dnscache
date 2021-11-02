@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"net"
+	"net/http/httptrace"
 	"testing"
 	"time"
 )
@@ -53,9 +54,9 @@ func TestClearCache(t *testing.T) {
 		t.Error("cache entry is not cleared")
 	}
 
-        options := ResolverRefreshOptions{}
-        options.ClearUnused = true
-        options.PersistOnFailure = false
+	options := ResolverRefreshOptions{}
+	options.ClearUnused = true
+	options.PersistOnFailure = false
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
 		t.Error("cache entry used flag is false, want true")
@@ -69,19 +70,17 @@ func TestClearCache(t *testing.T) {
 		t.Error("cache entry is not cleared")
 	}
 
-        options.ClearUnused = false
-        options.PersistOnFailure = true
-        br := &Resolver{}
-        br.Resolver = BadResolver{}
+	options.ClearUnused = false
+	options.PersistOnFailure = true
+	br := &Resolver{}
+	br.Resolver = BadResolver{}
 
-        _, _ = br.LookupHost(context.Background(), "google.com")
-        br.Resolver = BadResolver{choke: true}
-        br.RefreshWithOptions(options)
-        if len(br.cache["hgoogle.com"].rrs) == 0 {
-                t.Error("cache entry is cleared")
-        }
-
-
+	_, _ = br.LookupHost(context.Background(), "google.com")
+	br.Resolver = BadResolver{choke: true}
+	br.RefreshWithOptions(options)
+	if len(br.cache["hgoogle.com"].rrs) == 0 {
+		t.Error("cache entry is cleared")
+	}
 }
 
 func TestRaceOnDelete(t *testing.T) {
@@ -117,5 +116,37 @@ func TestRaceOnDelete(t *testing.T) {
 
 	ls <- true
 	rs <- true
+}
 
+func TestResolver_LookupHost_DNSHooksGetTriggerd(t *testing.T) {
+	var (
+		dnsStartInfo *httptrace.DNSStartInfo
+		dnsDoneInfo  *httptrace.DNSDoneInfo
+	)
+
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStartInfo = &info
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			dnsDoneInfo = &info
+		},
+	}
+
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
+	r := &Resolver{}
+
+	_, err := r.LookupHost(ctx, "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if dnsStartInfo == nil {
+		t.Error("dnsStartInfo is nil, indicating that DNSStart callback has not been invoked")
+	}
+
+	if dnsDoneInfo == nil {
+		t.Error("dnsDoneInfo is nil, indicating that DNSDone callback has not been invoked")
+	}
 }
