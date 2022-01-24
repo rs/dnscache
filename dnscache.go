@@ -10,6 +10,8 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+var DefaultCacheTimeout = 10 * time.Minute
+
 type DNSResolver interface {
 	LookupHost(ctx context.Context, host string) (addrs []string, err error)
 	LookupAddr(ctx context.Context, addr string) (names []string, err error)
@@ -30,17 +32,25 @@ type Resolver struct {
 	// OnCacheMiss is executed if the host or address is not included in
 	// the cache and the default lookup is executed.
 	OnCacheMiss func()
+
+	// cache timeout, when cache will expire, then refresh the key
+	CacheTimeout time.Duration
 }
 
 type ResolverRefreshOptions struct {
 	ClearUnused      bool
 	PersistOnFailure bool
+	// ClearUnused 方案是，在上一个刷新时间周期里若缓存没有被访问则删除
+	// ClearUnused 方案，在每次访问缓存时需要加读锁和写锁，性能不太好
+	// 如果采用 CacheExpireUnused 缓存过期方案，ClearUnused 策略便不使用了
+	CacheExpireUnused bool
 }
 
 type cacheEntry struct {
-	rrs  []string
-	err  error
-	used bool
+	rrs    []string
+	err    error
+	used   bool
+	expire int64 //刷新的时候赋值，当前时间+过期时间
 }
 
 // LookupAddr performs a reverse lookup for the given address, returning a list
@@ -61,8 +71,12 @@ func (r *Resolver) LookupHost(ctx context.Context, host string) (addrs []string,
 // the last Refresh. If clearUnused is true, entries which haven't be used since the
 // last Refresh are removed from the cache. If persistOnFailure is true, stale
 // entries will not be removed on failed lookups
-func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool) {
+func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cacheExpireUnused bool) {
 	r.once.Do(r.init)
+	if cacheExpireUnused {
+		r.refreshRecordsByCacheTimeout(persistOnFailure, cacheExpireUnused)
+		return
+	}
 	r.mu.RLock()
 	update := make([]string, 0, len(r.cache))
 	del := make([]string, 0, len(r.cache))
@@ -84,16 +98,40 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool) {
 	}
 
 	for _, key := range update {
+		// todo, err handle
 		r.update(context.Background(), key, false, persistOnFailure)
 	}
 }
 
+func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpireUnused bool) {
+	r.mu.RLock()
+	update := make([]string, 0, len(r.cache))
+	for key, entry := range r.cache {
+		// 这里距离缓存到期多久前，需要触发刷新动作，时间还需要衡量 todo
+		// 这个时间需要大于 自动刷新时间，远小于r.CacheTimeout
+		if (int64(time.Now().Second()) - entry.expire) < 60 {
+			update = append(update, key)
+		}
+	}
+	r.mu.RUnlock()
+
+	// 如果使用了 cacheExpireUnused 策略，则不使用了 clearUnused 策略
+	isUsed := false
+	if cacheExpireUnused {
+		isUsed = true
+	}
+	for _, key := range update {
+		// todo, err handle
+		r.update(context.Background(), key, isUsed, persistOnFailure)
+	}
+}
+
 func (r *Resolver) Refresh(clearUnused bool) {
-	r.refreshRecords(clearUnused, false)
+	r.refreshRecords(clearUnused, false, false)
 }
 
 func (r *Resolver) RefreshWithOptions(options ResolverRefreshOptions) {
-	r.refreshRecords(options.ClearUnused, options.PersistOnFailure)
+	r.refreshRecords(options.ClearUnused, options.PersistOnFailure, options.CacheExpireUnused)
 }
 
 func (r *Resolver) init() {
@@ -240,10 +278,18 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 		return
 	}
 	r.cache[key] = &cacheEntry{
-		rrs:  rrs,
-		err:  err,
-		used: used,
+		rrs:    rrs,
+		err:    err,
+		used:   used,
+		expire: time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000,
 	}
+}
+
+func (r *Resolver) getCacheTimeOut() time.Duration {
+	if r.CacheTimeout == 0 {
+		return DefaultCacheTimeout
+	}
+	return r.CacheTimeout
 }
 
 var defaultResolver = &defaultResolverWithTrace{}
