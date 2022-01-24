@@ -2,6 +2,7 @@ package dnscache
 
 import (
 	"context"
+	"log"
 	"net"
 	"net/http/httptrace"
 	"sync"
@@ -98,8 +99,11 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 	}
 
 	for _, key := range update {
-		// todo, err handle
-		r.update(context.Background(), key, false, persistOnFailure)
+		// todo ,待测试打印，循环和日志打印地方
+		rrs, err := r.update(context.Background(), key, false, persistOnFailure)
+		if err != nil {
+			log.Printf("update dnscache has some error, key: %v, rrs: %v, err:%v", key, rrs, err)
+		}
 	}
 }
 
@@ -121,8 +125,11 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 		isUsed = true
 	}
 	for _, key := range update {
-		// todo, err handle
-		r.update(context.Background(), key, isUsed, persistOnFailure)
+		// todo ,待测试打印，循环和日志打印地方
+		rrs, err := r.update(context.Background(), key, isUsed, persistOnFailure)
+		if err != nil {
+			log.Printf("update dnscache has some error, key: %v, rrs: %v, err:%v", key, rrs, err)
+		}
 	}
 }
 
@@ -301,8 +308,8 @@ type defaultResolverWithTrace struct{}
 func (d *defaultResolverWithTrace) LookupHost(ctx context.Context, host string) (addrs []string, err error) {
 	// `net.Resolver#LookupHost` does not cause invocation of `net.Resolver#lookupIPAddr`, therefore the `DNSStart` and `DNSDone` tracing hooks
 	// built into the stdlib are never called. `LookupIP`, despite it's name, can also be used to lookup a hostname but does cause these hooks to be
-	// triggered. The format of the reponse is different, therefore it needs this thin wrapper converting it.
-	rawIPs, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	// triggered. The format of the response is different, therefore it needs this thin wrapper converting it.
+	rawIPs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
