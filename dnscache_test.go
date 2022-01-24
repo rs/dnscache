@@ -10,6 +10,43 @@ import (
 	"time"
 )
 
+var (
+	testFreq                 = 1 * time.Second
+	testDefaultLookupTimeout = 1 * time.Second
+	testCacheTimeout         = 1 * time.Minute
+)
+
+func testResolver(t *testing.T) *Resolver {
+	t.Helper()
+	r, err := New(testFreq, testDefaultLookupTimeout, testCacheTimeout, nil)
+	if err != nil {
+		t.Fatalf("err: %s", err)
+	}
+	return r
+}
+
+func TestNew(t *testing.T) {
+	if _, err := New(testFreq, testDefaultLookupTimeout, testCacheTimeout, nil); err == nil {
+		t.Fatalf("expect to be failed")
+	}
+
+	{
+		resolver, err := New(testFreq, testDefaultLookupTimeout, testCacheTimeout, nil)
+		if err != nil {
+			t.Fatalf("expect not to be failed")
+		}
+		resolver.Stop()
+	}
+
+	{
+		resolver, err := New(0, 0, 0, nil)
+		if err != nil {
+			t.Fatalf("expect not to be failed")
+		}
+		resolver.Stop()
+	}
+}
+
 func TestResolver_LookupHost(t *testing.T) {
 	r := &Resolver{}
 	var cacheMiss bool
@@ -154,32 +191,14 @@ func TestResolver_LookupHost_DNSHooksGetTriggerd(t *testing.T) {
 }
 
 func TestExample(t *testing.T) {
-	//r := &Resolver{}
-	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, ResolverRefreshOptions{
+	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, &ResolverRefreshOptions{
 		ClearUnused:       false,
 		PersistOnFailure:  false,
 		CacheExpireUnused: true,
 	})
 
 	transport := &http.Transport{
-		DialContext: func(ctx context.Context, network string, addr string) (conn net.Conn, err error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-			ips, err := resolver.LookupHost(ctx, host)
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				var dialer net.Dialer
-				conn, err = dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
-				if err == nil {
-					break
-				}
-			}
-			return
-		},
+		DialContext: DialFunc(resolver, nil),
 	}
 	c := &http.Client{Transport: transport}
 	res, err := c.Get("http://httpbin.org/status/418")

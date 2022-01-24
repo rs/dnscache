@@ -62,7 +62,7 @@ type cacheEntry struct {
 
 // New initializes DNS cache resolver and starts auto refreshing in a new goroutine.
 // To stop refreshing, call `Stop()` function.
-func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Duration, options ResolverRefreshOptions) (*Resolver, error) {
+func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Duration, options *ResolverRefreshOptions) (*Resolver, error) {
 	if freq <= 0 {
 		freq = defaultFreq
 	}
@@ -73,6 +73,13 @@ func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Dura
 
 	if cacheTimeout <= 0 {
 		cacheTimeout = DefaultCacheTimeout
+	}
+	if options == nil {
+		options = &ResolverRefreshOptions{
+			ClearUnused:       false,
+			PersistOnFailure:  false,
+			CacheExpireUnused: true,
+		}
 	}
 
 	ticker := time.NewTicker(freq)
@@ -97,7 +104,7 @@ func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Dura
 			select {
 			case <-ticker.C:
 				log.Print("dnscache refresh ticker")
-				r.RefreshWithOptions(options)
+				r.RefreshWithOptions(*options)
 				//onRefreshedFn()
 			case <-ch:
 				return
@@ -106,6 +113,16 @@ func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Dura
 	}()
 
 	return r, nil
+}
+
+// Stop stops auto refreshing.
+func (r *Resolver) Stop() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closer != nil {
+		r.closer()
+		r.closer = nil
+	}
 }
 
 // LookupAddr performs a reverse lookup for the given address, returning a list
