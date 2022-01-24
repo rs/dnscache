@@ -11,7 +11,11 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-var DefaultCacheTimeout = 10 * time.Minute
+var (
+	defaultFreq          = 3 * time.Second
+	defaultLookupTimeout = 10 * time.Second
+	DefaultCacheTimeout  = 10 * time.Minute
+)
 
 type DNSResolver interface {
 	LookupHost(ctx context.Context, host string) (addrs []string, err error)
@@ -36,6 +40,8 @@ type Resolver struct {
 
 	// cache timeout, when cache will expire, then refresh the key
 	CacheTimeout time.Duration
+
+	closer func()
 }
 
 type ResolverRefreshOptions struct {
@@ -52,6 +58,54 @@ type cacheEntry struct {
 	err    error
 	used   bool
 	expire int64 //刷新的时候赋值，当前时间+过期时间
+}
+
+// New initializes DNS cache resolver and starts auto refreshing in a new goroutine.
+// To stop refreshing, call `Stop()` function.
+func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Duration, options ResolverRefreshOptions) (*Resolver, error) {
+	if freq <= 0 {
+		freq = defaultFreq
+	}
+
+	if lookupTimeout <= 0 {
+		lookupTimeout = defaultLookupTimeout
+	}
+
+	if cacheTimeout <= 0 {
+		cacheTimeout = DefaultCacheTimeout
+	}
+
+	ticker := time.NewTicker(freq)
+	ch := make(chan struct{})
+	closer := func() {
+		ticker.Stop()
+		close(ch)
+	}
+
+	// copy handler function to avoid race
+	//onRefreshedFn := onRefreshed
+	//lookupIPFn := lookupIP
+
+	r := &Resolver{
+		Timeout:      lookupTimeout,
+		CacheTimeout: cacheTimeout,
+		closer:       closer,
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				log.Print("dnscache refresh ticker")
+				r.RefreshWithOptions(options)
+				//onRefreshedFn()
+			case <-ch:
+				return
+			}
+		}
+	}()
+
+	return r, nil
 }
 
 // LookupAddr performs a reverse lookup for the given address, returning a list
