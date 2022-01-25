@@ -40,6 +40,9 @@ type Resolver struct {
 
 	// cache timeout, when cache will expire, then refresh the key
 	CacheTimeout time.Duration
+	// 缓存到期时间需要大于2倍刷新时间
+	// 自动刷新时间间隔
+	RefreshTime time.Duration
 
 	closer func()
 }
@@ -96,6 +99,7 @@ func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Dura
 	r := &Resolver{
 		Timeout:      lookupTimeout,
 		CacheTimeout: cacheTimeout,
+		RefreshTime:  freq,
 		closer:       closer,
 	}
 
@@ -182,11 +186,13 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 	r.mu.RLock()
 	update := make([]string, 0, len(r.cache))
 	for key, entry := range r.cache {
-		// 这里距离缓存到期多久前，需要触发刷新动作，时间还需要衡量 todo
-		// 这个时间需要大于 自动刷新时间，远小于r.CacheTimeout
-		if (int64(time.Now().Second()) - entry.expire) < 60 {
+		// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
+		if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
 			update = append(update, key)
+			log.Print("refreshRecordsByCacheTimeout update")
 		}
+		log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+
 	}
 	r.mu.RUnlock()
 
@@ -353,6 +359,7 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 		entry.rrs = rrs
 		entry.err = err
 		entry.used = used
+		entry.expire = time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000
 		return
 	}
 	r.cache[key] = &cacheEntry{

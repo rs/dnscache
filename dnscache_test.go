@@ -207,3 +207,23 @@ func TestExample(t *testing.T) {
 	}
 	// Output: 418
 }
+func TestCacheTimeout(t *testing.T) {
+	r, _ := New(3*time.Second, 5*time.Second, 1*time.Minute, &ResolverRefreshOptions{
+		ClearUnused:       false,
+		PersistOnFailure:  false,
+		CacheExpireUnused: true,
+	})
+	_, _ = r.LookupHost(context.Background(), "google.com")
+	if e := r.cache["hgoogle.com"]; e != nil && e.used {
+		t.Logf("cache entry expire:%v", e.expire)
+	}
+	_, _ = r.LookupHost(context.Background(), "google.com")
+	if e := r.cache["hgoogle.com"]; e != nil && e.used {
+		t.Logf("cache entry expire:%v", e.expire)
+	}
+	time.Sleep(1 * time.Minute)
+	_, _ = r.LookupHost(context.Background(), "google.com")
+	if e := r.cache["hgoogle.com"]; e != nil {
+		t.Logf("cache entry expire:%v", e.expire)
+	}
+}
