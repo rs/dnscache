@@ -174,7 +174,6 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 	}
 
 	for _, key := range update {
-		// todo ,待测试打印，循环和日志打印地方
 		rrs, err := r.update(context.Background(), key, false, persistOnFailure)
 		if err != nil {
 			log.Printf("update dnscache has some error, key: %v, rrs: %v, err:%v", key, rrs, err)
@@ -189,10 +188,7 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 		// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
 		if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
 			update = append(update, key)
-			log.Print("refreshRecordsByCacheTimeout update")
 		}
-		log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
-
 	}
 	r.mu.RUnlock()
 
@@ -202,7 +198,6 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 		isUsed = true
 	}
 	for _, key := range update {
-		// todo ,待测试打印，循环和日志打印地方
 		rrs, err := r.update(context.Background(), key, isUsed, persistOnFailure)
 		if err != nil {
 			log.Printf("update dnscache has some error, key: %v, rrs: %v, err:%v", key, rrs, err)

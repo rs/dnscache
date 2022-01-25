@@ -3,6 +3,7 @@ package dnscache
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -26,8 +27,8 @@ func testResolver(t *testing.T) *Resolver {
 }
 
 func TestNew(t *testing.T) {
-	if _, err := New(testFreq, testDefaultLookupTimeout, testCacheTimeout, nil); err == nil {
-		t.Fatalf("expect to be failed")
+	if _, err := New(testFreq, testDefaultLookupTimeout, testCacheTimeout, nil); err != nil {
+		t.Fatalf("expect not to be failed")
 	}
 
 	{
@@ -208,6 +209,8 @@ func TestExample(t *testing.T) {
 	// Output: 418
 }
 func TestCacheTimeout(t *testing.T) {
+	timeTemplate1 := "2006-01-02 15:04:05" //常规类型
+
 	r, _ := New(3*time.Second, 5*time.Second, 1*time.Minute, &ResolverRefreshOptions{
 		ClearUnused:       false,
 		PersistOnFailure:  false,
@@ -215,15 +218,21 @@ func TestCacheTimeout(t *testing.T) {
 	})
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Logf("cache entry expire:%v", e.expire)
+		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Logf("cache entry expire:%v", e.expire)
+		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
 	time.Sleep(1 * time.Minute)
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil {
-		t.Logf("cache entry expire:%v", e.expire)
+		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
+}
+
+func TestTime(t *testing.T) {
+	timeTemplate1 := "2006-01-02 15:04:05"
+	t1 := time.Now().Unix()
+	log.Println(time.Unix(t1, 0).Format(timeTemplate1))
 }
