@@ -86,7 +86,7 @@ func TestDialFuncRand(t *testing.T) {
 	resolver := &Resolver{
 		cache: map[string]*cacheEntry{
 			"deeeet.com": {
-				rrs:    []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"},
+				rrs:    []string{"110.242.68.3", "110.242.68.4"},
 				err:    nil,
 				used:   false,
 				expire: 0,
@@ -101,7 +101,7 @@ func TestDialFuncRand(t *testing.T) {
 	}
 
 	for i := 0; i < 100; i++ {
-		if _, err := DialFunc(resolver, dialF)(context.Background(), "tcp", "deeeet.com:443"); err != nil {
+		if _, err := DialFunc(resolver, dialF)(context.Background(), "tcp", "baidu.com:80"); err != nil {
 			t.Fatalf("err: %s", err)
 		}
 	}

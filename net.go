@@ -2,7 +2,6 @@ package dnscache
 
 import (
 	"context"
-	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -51,8 +50,8 @@ func DialFunc(resolver *Resolver, baseDialFunc dialFunc) dialFunc {
 
 		var firstErr error
 		for _, randomIndex := range randPerm(len(ips)) {
-			log.Printf("dnscache addrs:%v", ips)
-			log.Printf("dnscache addr:%v", ips[randomIndex])
+			//log.Printf("dnscache addrs:%v", ips)
+			//log.Printf("dnscache addr:%v", ips[randomIndex])
 			conn, err := baseDialFunc(ctx, "tcp", net.JoinHostPort(ips[randomIndex], p))
 			if err == nil {
 				return conn, nil

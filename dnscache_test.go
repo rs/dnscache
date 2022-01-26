@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"sync"
 	"testing"
 	"time"
 )
@@ -191,23 +193,38 @@ func TestResolver_LookupHost_DNSHooksGetTriggerd(t *testing.T) {
 	}
 }
 
-func TestExample(t *testing.T) {
+/**
+go test  -v -race  -run=TestConcurrentExample
+*/
+func TestConcurrentExample(t *testing.T) {
 	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, &ResolverRefreshOptions{
 		ClearUnused:       false,
 		PersistOnFailure:  false,
 		CacheExpireUnused: true,
 	})
+	// You can create a HTTP client which selects an IP from dnscache
+	// randomly and dials it.
+	rand.Seed(time.Now().UTC().UnixNano()) // You MUST run in once in your application
 
 	transport := &http.Transport{
 		DialContext: DialFunc(resolver, nil),
 	}
 	c := &http.Client{Transport: transport}
-	res, err := c.Get("http://httpbin.org/status/418")
-	if err == nil {
-		fmt.Println(res.StatusCode)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			res, err := c.Get("http://www.baidu.com")
+			if err == nil {
+				fmt.Printf("StatusCode：%v", res.StatusCode)
+			}
+		}()
 	}
-	// Output: 418
+	wg.Wait()
 }
+
 func TestCacheTimeout(t *testing.T) {
 	timeTemplate1 := "2006-01-02 15:04:05" //常规类型
 
@@ -218,16 +235,20 @@ func TestCacheTimeout(t *testing.T) {
 	})
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
+		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
-	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
+	_, _ = r.LookupHost(context.Background(), "baidu.com")
+	if e := r.cache["hbaidu.com"]; e != nil && e.used {
+		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
 	time.Sleep(1 * time.Minute)
 	_, _ = r.LookupHost(context.Background(), "google.com")
 	if e := r.cache["hgoogle.com"]; e != nil {
-		t.Logf("cache entry expire:%v", time.Unix(e.expire, 0).Format(timeTemplate1))
+		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
+	}
+	_, _ = r.LookupHost(context.Background(), "baidu.com")
+	if e := r.cache["hbaidu.com"]; e != nil && e.used {
+		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
 	}
 }
 
@@ -235,4 +256,65 @@ func TestTime(t *testing.T) {
 	timeTemplate1 := "2006-01-02 15:04:05"
 	t1 := time.Now().Unix()
 	log.Println(time.Unix(t1, 0).Format(timeTemplate1))
+}
+
+func TestCacheMap(t *testing.T) {
+	r := &Resolver{}
+	m := r.cache
+	log.Printf("%v", m)
+
+}
+
+/**
+➜  dnscache git:(cache_map_add_expire) ✗ go test -run=none -bench=Benchmark_cacheMap -benchmem .
+goos: darwin
+goarch: amd64
+pkg: github.com/rs/dnscache
+Benchmark_cacheMap-12            3469770               301 ns/op             135 B/op          3 allocs/op
+PASS
+ok      github.com/rs/dnscache  3.837s
+*/
+func Benchmark_cacheMap(b *testing.B) {
+	r := &Resolver{}
+	r.init()
+	m := r.cache
+	for i := 0; i < b.N; i++ {
+		func() {
+			m[string(i)] = &cacheEntry{
+				rrs:    []string{"983493848", ""},
+				err:    nil,
+				used:   false,
+				expire: 0,
+			}
+
+		}()
+	}
+	for i := 0; i < b.N; i++ {
+		func() {
+			_ = m[string(i)]
+		}()
+	}
+}
+
+func TestExample(t *testing.T) {
+	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, &ResolverRefreshOptions{
+		ClearUnused:       false,
+		PersistOnFailure:  false,
+		CacheExpireUnused: true,
+	})
+	// You can create a HTTP client which selects an IP from dnscache
+	// randomly and dials it.
+	rand.Seed(time.Now().UTC().UnixNano()) // You MUST run in once in your application
+
+	transport := &http.Transport{
+		DialContext: DialFunc(resolver, nil),
+	}
+	c := &http.Client{Transport: transport}
+
+	go func() {
+		res, err := c.Get("http://www.baidu.com")
+		if err == nil {
+			fmt.Printf("StatusCode：%v", res.StatusCode)
+		}
+	}()
 }
