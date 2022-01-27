@@ -311,10 +311,38 @@ func TestExample(t *testing.T) {
 	}
 	c := &http.Client{Transport: transport}
 
-	go func() {
-		res, err := c.Get("http://www.baidu.com")
-		if err == nil {
-			fmt.Printf("StatusCode：%v", res.StatusCode)
-		}
-	}()
+	res, err := c.Get("http://www.baidu.com")
+	if err == nil {
+		fmt.Printf("StatusCode：%v", res.StatusCode)
+	}
+}
+
+func TestHitCache(t *testing.T) {
+	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, &ResolverRefreshOptions{
+		ClearUnused:       false,
+		PersistOnFailure:  false,
+		CacheExpireUnused: true,
+	})
+	// You can create a HTTP client which selects an IP from dnscache
+	// randomly and dials it.
+	rand.Seed(time.Now().UTC().UnixNano()) // You MUST run in once in your application
+
+	transport := &http.Transport{
+		DialContext: DialFunc(resolver, nil),
+	}
+	c := &http.Client{Transport: transport}
+
+	res, err := c.Get("http://www.baidu.com")
+	if err == nil {
+		fmt.Printf("StatusCode：%v", res.StatusCode)
+	}
+	res2, err := c.Get("http://www.163.com")
+	if err == nil {
+		fmt.Printf("StatusCode：%v", res2.StatusCode)
+	}
+	time.Sleep(5)
+	res1, err := c.Get("http://www.baidu.com")
+	if err == nil {
+		fmt.Printf("StatusCode：%v", res1.StatusCode)
+	}
 }
