@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/monicapu/dnscache/cmap"
 	"math/rand"
 	"net"
 	"testing"
@@ -12,15 +13,14 @@ import (
 
 func TestDialFunc(t *testing.T) {
 	resolver := &Resolver{
-		cache: map[string]*cacheEntry{
-			"deeeet.com": {
-				rrs:    []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"},
-				err:    nil,
-				used:   false,
-				expire: 0,
-			},
-		},
+		cache: cmap.New(),
 	}
+	resolver.cache.Set("deeeet.com", &cacheEntry{
+		rrs:    []string{"127.0.0.1", "127.0.0.2", "127.0.0.3"},
+		err:    nil,
+		used:   false,
+		expire: 0,
+	})
 
 	cases := []struct {
 		permF func(n int) []int
@@ -84,15 +84,14 @@ func TestDialFuncRand(t *testing.T) {
 	}()
 
 	resolver := &Resolver{
-		cache: map[string]*cacheEntry{
-			"deeeet.com": {
-				rrs:    []string{"110.242.68.3", "110.242.68.4"},
-				err:    nil,
-				used:   false,
-				expire: 0,
-			},
-		},
+		cache: cmap.New(),
 	}
+	resolver.cache.Set("deeeet.com", &cacheEntry{
+		rrs:    []string{"110.242.68.3", "110.242.68.4"},
+		err:    nil,
+		used:   false,
+		expire: 0,
+	})
 
 	count := make(map[string]int)
 	dialF := func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -137,16 +136,16 @@ func TestDialFuncError2(t *testing.T) {
 }
 
 func TestDialFuncError3(t *testing.T) {
+
 	resolver := &Resolver{
-		cache: map[string]*cacheEntry{
-			"tcnksm.io": {
-				rrs:    []string{"1.1.1.1", "2.2.2.2", "3.3.3.3"},
-				err:    nil,
-				used:   false,
-				expire: 0,
-			},
-		},
+		cache: cmap.New(),
 	}
+	resolver.cache.Set("tcnksm.io", &cacheEntry{
+		rrs:    []string{"1.1.1.1", "2.2.2.2", "3.3.3.3"},
+		err:    nil,
+		used:   false,
+		expire: 0,
+	})
 
 	origFunc := randPerm
 	randPerm = func(n int) []int {

@@ -84,32 +84,50 @@ func TestResolver_LookupHost(t *testing.T) {
 func TestClearCache(t *testing.T) {
 	r := &Resolver{}
 	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
-		t.Error("cache entry used flag is false, want true")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("cache entry used flag is false, want true, used: %t", entry.used)
+		}
 	}
 	r.Refresh(true)
-	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Error("cache entry used flag is true, want false")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
 	}
 	r.Refresh(true)
-	if e := r.cache["hgoogle.com"]; e != nil {
-		t.Error("cache entry is not cleared")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("cache entry is not cleared, used: %v", entry.used)
+		}
 	}
 
 	options := ResolverRefreshOptions{}
 	options.ClearUnused = true
 	options.PersistOnFailure = false
 	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil && !e.used {
-		t.Error("cache entry used flag is false, want true")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
 	}
 	r.RefreshWithOptions(options)
-	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Error("cache entry used flag is true, want false")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("cache entry used flag is true, want false, used: %v", entry.used)
+		}
 	}
 	r.RefreshWithOptions(options)
-	if e := r.cache["hgoogle.com"]; e != nil {
-		t.Error("cache entry is not cleared")
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if ok {
+			t.Error("ccache entry is not cleared, used: %v", entry.used)
+		}
 	}
 
 	options.ClearUnused = false
@@ -120,8 +138,12 @@ func TestClearCache(t *testing.T) {
 	_, _ = br.LookupHost(context.Background(), "google.com")
 	br.Resolver = BadResolver{choke: true}
 	br.RefreshWithOptions(options)
-	if len(br.cache["hgoogle.com"].rrs) == 0 {
-		t.Error("cache entry is cleared")
+	if e, found := br.cache.Get("hgoogle.com"); found != false {
+		if entry, ok := e.(*cacheEntry); ok != false {
+			if len(entry.rrs) == 0 {
+				t.Error("cache entry is cleared")
+			}
+		}
 	}
 }
 
@@ -234,21 +256,57 @@ func TestCacheTimeout(t *testing.T) {
 		CacheExpireUnused: true,
 	})
 	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil && e.used {
-		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if !ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
+		if entry.used {
+			t.Logf("cache entry, rrs:%v expire:%v", entry.rrs, time.Unix(entry.expire, 0).Format(timeTemplate1))
+		}
 	}
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if !ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
+		if entry.used {
+			t.Logf("cache entry, rrs:%v expire:%v", entry.rrs, time.Unix(entry.expire, 0).Format(timeTemplate1))
+		}
+	}
+
 	_, _ = r.LookupHost(context.Background(), "baidu.com")
-	if e := r.cache["hbaidu.com"]; e != nil && e.used {
-		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
+	if e, found := r.cache.Get("hbaidu.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if !ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
+		if entry.used {
+			t.Logf("cache entry, rrs:%v expire:%v", entry.rrs, time.Unix(entry.expire, 0).Format(timeTemplate1))
+		}
 	}
+
 	time.Sleep(1 * time.Minute)
 	_, _ = r.LookupHost(context.Background(), "google.com")
-	if e := r.cache["hgoogle.com"]; e != nil {
-		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
+	if e, found := r.cache.Get("hgoogle.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if !ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
+		if entry.used {
+			t.Logf("cache entry, rrs:%v expire:%v", entry.rrs, time.Unix(entry.expire, 0).Format(timeTemplate1))
+		}
 	}
+
 	_, _ = r.LookupHost(context.Background(), "baidu.com")
-	if e := r.cache["hbaidu.com"]; e != nil && e.used {
-		t.Logf("cache entry, rrs:%v expire:%v", e.rrs, time.Unix(e.expire, 0).Format(timeTemplate1))
+	if e, found := r.cache.Get("hbaidu.com"); found != false {
+		entry, ok := e.(*cacheEntry)
+		if !ok {
+			t.Error("cache entry used flag is false, want true, used: %v", entry.used)
+		}
+		if entry.used {
+			t.Logf("cache entry, rrs:%v expire:%v", entry.rrs, time.Unix(entry.expire, 0).Format(timeTemplate1))
+		}
 	}
 }
 
@@ -274,27 +332,27 @@ Benchmark_cacheMap-12            3469770               301 ns/op             135
 PASS
 ok      github.com/rs/dnscache  3.837s
 */
-func Benchmark_cacheMap(b *testing.B) {
-	r := &Resolver{}
-	r.init()
-	m := r.cache
-	for i := 0; i < b.N; i++ {
-		func() {
-			m[string(i)] = &cacheEntry{
-				rrs:    []string{"983493848", ""},
-				err:    nil,
-				used:   false,
-				expire: 0,
-			}
-
-		}()
-	}
-	for i := 0; i < b.N; i++ {
-		func() {
-			_ = m[string(i)]
-		}()
-	}
-}
+//func Benchmark_cacheMap(b *testing.B) {
+//	r := &Resolver{}
+//	r.init()
+//	m := r.cache
+//	for i := 0; i < b.N; i++ {
+//		func() {
+//			m[string(i)] = &cacheEntry{
+//				rrs:    []string{"983493848", ""},
+//				err:    nil,
+//				used:   false,
+//				expire: 0,
+//			}
+//
+//		}()
+//	}
+//	for i := 0; i < b.N; i++ {
+//		func() {
+//			_ = m[string(i)]
+//		}()
+//	}
+//}
 
 func TestExample(t *testing.T) {
 	resolver, _ := New(3*time.Second, 5*time.Second, 10*time.Minute, &ResolverRefreshOptions{

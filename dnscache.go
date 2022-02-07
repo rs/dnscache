@@ -2,13 +2,13 @@ package dnscache
 
 import (
 	"context"
+	"github.com/monicapu/dnscache/cmap"
+	"golang.org/x/sync/singleflight"
 	"log"
 	"net"
 	"net/http/httptrace"
 	"sync"
 	"time"
-
-	"golang.org/x/sync/singleflight"
 )
 
 var (
@@ -30,9 +30,10 @@ type Resolver struct {
 	// net.DefaultResolver is used instead.
 	Resolver DNSResolver
 
-	once  sync.Once
-	mu    sync.RWMutex
-	cache map[string]*cacheEntry
+	once sync.Once
+	mu   sync.RWMutex
+	//cache map[string]*cacheEntry
+	cache cmap.ConcurrentMap
 
 	// OnCacheMiss is executed if the host or address is not included in
 	// the cache and the default lookup is executed.
@@ -153,24 +154,37 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 		r.refreshRecordsByCacheTimeout(persistOnFailure, cacheExpireUnused)
 		return
 	}
-	r.mu.RLock()
-	update := make([]string, 0, len(r.cache))
-	del := make([]string, 0, len(r.cache))
-	for key, entry := range r.cache {
-		if entry.used {
-			update = append(update, key)
-		} else if clearUnused {
-			del = append(del, key)
+	//r.mu.RLock()
+	cacheCount := r.cache.Count()
+	update := make([]string, 0, cacheCount)
+	del := make([]string, 0, cacheCount)
+	for item := range r.cache.IterBuffered() {
+		entry, ok := item.Val.(*cacheEntry)
+		if ok {
+			if entry.used {
+				update = append(update, item.Key)
+			} else if clearUnused {
+				del = append(del, item.Key)
+			}
 		}
 	}
-	r.mu.RUnlock()
+
+	//for key, entry := range r.cache {
+	//	if entry.used {
+	//		update = append(update, key)
+	//	} else if clearUnused {
+	//		del = append(del, key)
+	//	}
+	//}
+	//r.mu.RUnlock()
 
 	if len(del) > 0 {
-		r.mu.Lock()
+		//r.mu.Lock()
 		for _, key := range del {
-			delete(r.cache, key)
+			//delete(r.cache, key)
+			r.cache.Remove(key)
 		}
-		r.mu.Unlock()
+		//r.mu.Unlock()
 	}
 
 	for _, key := range update {
@@ -182,16 +196,26 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 }
 
 func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpireUnused bool) {
-	r.mu.RLock()
-	update := make([]string, 0, len(r.cache))
-	for key, entry := range r.cache {
-		// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
-		if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
-			update = append(update, key)
-			log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+	//r.mu.RLock()
+	update := make([]string, 0, r.cache.Count())
+	for item := range r.cache.IterBuffered() {
+		entry, ok := item.Val.(*cacheEntry)
+		if ok {
+			if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
+				update = append(update, item.Key)
+				log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", item.Key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+			}
 		}
 	}
-	r.mu.RUnlock()
+
+	//for key, entry := range r.cache {
+	//	// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
+	//	if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
+	//		update = append(update, key)
+	//		log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+	//	}
+	//}
+	//r.mu.RUnlock()
 
 	// 如果使用了 cacheExpireUnused 策略，则不使用了 clearUnused 策略
 	isUsed := false
@@ -214,8 +238,13 @@ func (r *Resolver) RefreshWithOptions(options ResolverRefreshOptions) {
 	r.refreshRecords(options.ClearUnused, options.PersistOnFailure, options.CacheExpireUnused)
 }
 
+type ConcurrentMapSlice struct {
+	m []map[string]*cacheEntry
+}
+
 func (r *Resolver) init() {
-	r.cache = make(map[string]*cacheEntry)
+	//r.cache = make(map[string]*cacheEntry)
+	r.cache = cmap.New()
 }
 
 // lookupGroup merges lookup calls together for lookups for the same host. The
@@ -231,7 +260,7 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 		}
 		rrs, err = r.update(ctx, key, true, false)
 	} else {
-		log.Printf("lookup hit cache, key: %v, map: %v", key, r.cache)
+		log.Printf("lookup hit cache, key: %v", key)
 	}
 
 	return
@@ -272,9 +301,9 @@ func (r *Resolver) update(ctx context.Context, key string, used bool, persistOnF
 		}
 
 		log.Printf("find from dns server, key: %v, rrs: %v", key, rrs)
-		r.mu.Lock()
+		//r.mu.Lock()
 		r.storeLocked(key, rrs, used, err)
-		r.mu.Unlock()
+		//r.mu.Unlock()
 	}
 	return
 }
@@ -334,40 +363,69 @@ func (r *Resolver) prepareCtx(origContext context.Context) (ctx context.Context,
 }
 
 func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
-	r.mu.RLock()
+	//r.mu.RLock()
 	var entry *cacheEntry
-	entry, found = r.cache[key]
+	//entry, found = r.cache[key]
+	one, found := r.cache.Get(key)
 	if !found {
-		r.mu.RUnlock()
+		log.Print("load_not_found")
 		return
 	}
+	entry, ok := one.(*cacheEntry)
+	if !ok {
+		log.Print("load_interface_not_ok")
+		return
+	}
+	//if !found {
+	//	r.mu.RUnlock()
+	//	return
+	//}
 	rrs = entry.rrs
 	err = entry.err
 	used := entry.used
-	r.mu.RUnlock()
+	//r.mu.RUnlock()
 	if !used {
-		r.mu.Lock()
+		log.Print("load_used_true")
+		// todo 待确认，引用和赋值问题
 		entry.used = true
-		r.mu.Unlock()
+		r.cache.Set(key, entry)
+		//r.mu.Lock()
+		//entry.used = true
+		//r.mu.Unlock()
 	}
+	log.Print("load_set_ok")
+
 	return rrs, err, true
 }
 
 func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
-	if entry, found := r.cache[key]; found {
-		// Update existing entry in place
-		entry.rrs = rrs
-		entry.err = err
-		entry.used = used
-		entry.expire = time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000
-		return
+
+	//if one, found := r.cache.Get(key); found {
+	//	entry,ok := one.(*cacheEntry);if !ok {
+	//		return
+	//	}
+	//	// Update existing entry in place
+	//	entry.rrs = rrs
+	//	entry.err = err
+	//	entry.used = used
+	//	entry.expire = time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000
+	//	return
+	//}
+	cb := func(exists bool, valueInMap interface{}, newValue interface{}) interface{} {
+		nv := newValue.(*cacheEntry)
+		if !exists {
+			return []*cacheEntry{nv}
+		}
+		res := valueInMap.([]*cacheEntry)
+		return append(res, nv)
 	}
-	r.cache[key] = &cacheEntry{
+	entry := &cacheEntry{
 		rrs:    rrs,
 		err:    err,
 		used:   used,
 		expire: time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000,
 	}
+	r.cache.Upsert(key, entry, cb)
 }
 
 func (r *Resolver) getCacheTimeOut() time.Duration {
