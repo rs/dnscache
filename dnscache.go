@@ -107,7 +107,7 @@ func New(freq time.Duration, lookupTimeout time.Duration, cacheTimeout time.Dura
 		for {
 			select {
 			case <-ticker.C:
-				log.Print("dnscache refresh ticker")
+				//log.Print("dnscache refresh ticker")
 				r.RefreshWithOptions(*options)
 				//onRefreshedFn()
 			case <-ch:
@@ -188,7 +188,7 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 		// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
 		if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
 			update = append(update, key)
-			log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+			//log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
 		}
 	}
 	r.mu.RUnlock()
@@ -230,9 +230,10 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 			r.OnCacheMiss()
 		}
 		rrs, err = r.update(ctx, key, true, false)
-	} else {
-		log.Printf("lookup hit cache, key: %v, map: %v", key, r.cache)
 	}
+	//else {
+	//	log.Printf("lookup hit cache, key: %v, map: %v", key, r.cache)
+	//}
 
 	return
 }
