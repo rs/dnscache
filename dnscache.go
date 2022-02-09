@@ -411,21 +411,23 @@ func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
 	//	entry.expire = time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000
 	//	return
 	//}
-	cb := func(exists bool, valueInMap interface{}, newValue interface{}) interface{} {
-		nv := newValue.(*cacheEntry)
-		if !exists {
-			return []*cacheEntry{nv}
-		}
-		res := valueInMap.([]*cacheEntry)
-		return append(res, nv)
-	}
+
+	//cb := func(exists bool, valueInMap interface{}, newValue interface{}) interface{} {
+	//	nv := newValue.(*cacheEntry)
+	//	if !exists {
+	//		return []*cacheEntry{nv}
+	//	}
+	//	res := valueInMap.([]*cacheEntry)
+	//	return append(res, nv)
+	//}
 	entry := &cacheEntry{
 		rrs:    rrs,
 		err:    err,
 		used:   used,
 		expire: time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000,
 	}
-	r.cache.Upsert(key, entry, cb)
+	//r.cache.Upsert(key, entry, cb)
+	r.cache.Set(key, entry)
 }
 
 func (r *Resolver) getCacheTimeOut() time.Duration {
