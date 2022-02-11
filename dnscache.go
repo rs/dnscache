@@ -189,7 +189,7 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 		if ok {
 			if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
 				update = append(update, item.Key)
-				log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", item.Key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
+				//log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", item.Key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
 			}
 		}
 	}
@@ -236,9 +236,10 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 			r.OnCacheMiss()
 		}
 		rrs, err = r.update(ctx, key, true, false)
-	} else {
-		log.Printf("lookup hit cache, key: %v", key)
 	}
+	//else {
+	//	log.Printf("lookup hit cache, key: %v", key)
+	//}
 
 	return
 }
@@ -341,19 +342,19 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	var entry *cacheEntry
 	one, found := r.cache.Get(key)
 	if !found {
-		log.Print("first, load_not_found")
+		//log.Print("first, load_not_found")
 		return
 	}
 	entry, ok := one.(*cacheEntry)
 	if !ok {
-		log.Print("load_interface_not_ok")
+		//log.Print("load_interface_not_ok")
 		return
 	}
 	rrs = entry.rrs
 	err = entry.err
 	used := entry.used
 	if !used {
-		log.Print("load_used_true")
+		//log.Print("load_used_true")
 		// entry，和one，map里值是指针
 		entry := &cacheEntry{
 			rrs:    rrs,
@@ -363,7 +364,7 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 		}
 		r.cache.Set(key, entry)
 	}
-	log.Print("load_set_ok")
+	//log.Print("load_set_ok")
 
 	return rrs, err, true
 }
