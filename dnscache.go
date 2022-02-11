@@ -368,7 +368,7 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	//entry, found = r.cache[key]
 	one, found := r.cache.Get(key)
 	if !found {
-		log.Print("load_not_found")
+		log.Print("first, load_not_found")
 		return
 	}
 	entry, ok := one.(*cacheEntry)
@@ -386,8 +386,13 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 	//r.mu.RUnlock()
 	if !used {
 		log.Print("load_used_true")
-		// todo 待确认，引用和赋值问题
-		entry.used = true
+		// entry，和one，map里值是指针
+		entry := &cacheEntry{
+			rrs:    rrs,
+			err:    err,
+			used:   true,
+			expire: entry.expire,
+		}
 		r.cache.Set(key, entry)
 		//r.mu.Lock()
 		//entry.used = true
