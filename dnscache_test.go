@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -437,4 +438,62 @@ func BenchmarkTestLoad(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _, _ = r.load(key)
 	}
+}
+
+/**
+将一万个不重复的键值对同时以200万次写和200万次读
+➜  dnscache git:(ConcurrentMapShared) ✗ go test -run=none -bench=BenchmarkMapShared -benchmem .
+goos: darwin
+goarch: amd64
+pkg: github.com/monicapu/dnscache
+BenchmarkMapShared-12            2113465               570 ns/op              64 B/op          1 allocs/op
+PASS
+ok      github.com/monicapu/dnscache    2.070s
+
+*/
+func BenchmarkMapShared(b *testing.B) {
+	r, _ := New(3*time.Second, 5*time.Second, 1*time.Minute, &ResolverRefreshOptions{
+		ClearUnused:       false,
+		PersistOnFailure:  false,
+		CacheExpireUnused: true,
+	})
+	r.init()
+	num := 10000
+	testCase := genNoRepeatTestCase(num) // 10000个不重复的键值对
+	for _, v := range testCase {
+		r.storeLocked(v.Key, v.Val, true, nil)
+	}
+	b.ResetTimer()
+
+	wg := sync.WaitGroup{}
+	wg.Add(b.N * 2)
+	for i := 0; i < b.N; i++ {
+		e := testCase[rand.Intn(num)]
+		go func(key string, val []string) {
+			r.storeLocked(key, val, true, nil)
+			wg.Done()
+		}(e.Key, e.Val)
+
+		go func(key string) {
+			_, _, _ = r.load(key)
+			wg.Done()
+		}(e.Key)
+	}
+	wg.Wait()
+}
+
+type testRam struct {
+	Key string
+	Val []string
+}
+
+func genNoRepeatTestCase(num int) []testRam {
+	var res []testRam
+	for i := 0; i < num; i++ {
+		res = append(res, testRam{
+			Key: "hgoogle " + strconv.Itoa(i),
+			Val: []string{"hgoogleaddr" + strconv.Itoa(i)},
+		})
+	}
+	return res
 }
