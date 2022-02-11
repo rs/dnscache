@@ -154,7 +154,6 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 		r.refreshRecordsByCacheTimeout(persistOnFailure, cacheExpireUnused)
 		return
 	}
-	//r.mu.RLock()
 	cacheCount := r.cache.Count()
 	update := make([]string, 0, cacheCount)
 	del := make([]string, 0, cacheCount)
@@ -169,22 +168,10 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 		}
 	}
 
-	//for key, entry := range r.cache {
-	//	if entry.used {
-	//		update = append(update, key)
-	//	} else if clearUnused {
-	//		del = append(del, key)
-	//	}
-	//}
-	//r.mu.RUnlock()
-
 	if len(del) > 0 {
-		//r.mu.Lock()
 		for _, key := range del {
-			//delete(r.cache, key)
 			r.cache.Remove(key)
 		}
-		//r.mu.Unlock()
 	}
 
 	for _, key := range update {
@@ -196,7 +183,6 @@ func (r *Resolver) refreshRecords(clearUnused bool, persistOnFailure bool, cache
 }
 
 func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpireUnused bool) {
-	//r.mu.RLock()
 	update := make([]string, 0, r.cache.Count())
 	for item := range r.cache.IterBuffered() {
 		entry, ok := item.Val.(*cacheEntry)
@@ -207,15 +193,6 @@ func (r *Resolver) refreshRecordsByCacheTimeout(persistOnFailure bool, cacheExpi
 			}
 		}
 	}
-
-	//for key, entry := range r.cache {
-	//	// 距离缓存到期多久前，需要触发刷新动作：缓存到期时间需要大于2倍刷新时间
-	//	if (entry.expire - time.Now().Unix()) <= r.RefreshTime.Milliseconds()/1000*2 {
-	//		update = append(update, key)
-	//		log.Printf("refreshRecordsByCacheTimeout, key: %v, entry: %v, timeDiff:%v, refreshTime:%v", key, entry, entry.expire-time.Now().Unix(), r.RefreshTime.Milliseconds()/1000*2)
-	//	}
-	//}
-	//r.mu.RUnlock()
 
 	// 如果使用了 cacheExpireUnused 策略，则不使用了 clearUnused 策略
 	isUsed := false
@@ -301,9 +278,7 @@ func (r *Resolver) update(ctx context.Context, key string, used bool, persistOnF
 		}
 
 		log.Printf("find from dns server, key: %v, rrs: %v", key, rrs)
-		//r.mu.Lock()
 		r.storeLocked(key, rrs, used, err)
-		//r.mu.Unlock()
 	}
 	return
 }
@@ -363,9 +338,7 @@ func (r *Resolver) prepareCtx(origContext context.Context) (ctx context.Context,
 }
 
 func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
-	//r.mu.RLock()
 	var entry *cacheEntry
-	//entry, found = r.cache[key]
 	one, found := r.cache.Get(key)
 	if !found {
 		log.Print("first, load_not_found")
@@ -376,14 +349,9 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 		log.Print("load_interface_not_ok")
 		return
 	}
-	//if !found {
-	//	r.mu.RUnlock()
-	//	return
-	//}
 	rrs = entry.rrs
 	err = entry.err
 	used := entry.used
-	//r.mu.RUnlock()
 	if !used {
 		log.Print("load_used_true")
 		// entry，和one，map里值是指针
@@ -394,9 +362,6 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 			expire: entry.expire,
 		}
 		r.cache.Set(key, entry)
-		//r.mu.Lock()
-		//entry.used = true
-		//r.mu.Unlock()
 	}
 	log.Print("load_set_ok")
 
@@ -404,34 +369,12 @@ func (r *Resolver) load(key string) (rrs []string, err error, found bool) {
 }
 
 func (r *Resolver) storeLocked(key string, rrs []string, used bool, err error) {
-
-	//if one, found := r.cache.Get(key); found {
-	//	entry,ok := one.(*cacheEntry);if !ok {
-	//		return
-	//	}
-	//	// Update existing entry in place
-	//	entry.rrs = rrs
-	//	entry.err = err
-	//	entry.used = used
-	//	entry.expire = time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000
-	//	return
-	//}
-
-	//cb := func(exists bool, valueInMap interface{}, newValue interface{}) interface{} {
-	//	nv := newValue.(*cacheEntry)
-	//	if !exists {
-	//		return []*cacheEntry{nv}
-	//	}
-	//	res := valueInMap.([]*cacheEntry)
-	//	return append(res, nv)
-	//}
 	entry := &cacheEntry{
 		rrs:    rrs,
 		err:    err,
 		used:   used,
 		expire: time.Now().Unix() + r.getCacheTimeOut().Milliseconds()/1000,
 	}
-	//r.cache.Upsert(key, entry, cb)
 	r.cache.Set(key, entry)
 }
 
