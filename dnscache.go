@@ -27,6 +27,9 @@ type Resolver struct {
 	mu    sync.RWMutex
 	cache map[string]*cacheEntry
 
+	// Merge concurrent lookups only within this resolver.
+	lookupGroup singleflight.Group
+
 	// OnCacheMiss is executed if the host or address is not included in
 	// the cache and the default lookup is executed.
 	OnCacheMiss func()
@@ -100,10 +103,6 @@ func (r *Resolver) init() {
 	r.cache = make(map[string]*cacheEntry)
 }
 
-// lookupGroup merges lookup calls together for lookups for the same host. The
-// lookupGroup key is is the LookupIPAddr.host argument.
-var lookupGroup singleflight.Group
-
 func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err error) {
 	var found bool
 	rrs, err, found = r.load(key)
@@ -117,7 +116,7 @@ func (r *Resolver) lookup(ctx context.Context, key string) (rrs []string, err er
 }
 
 func (r *Resolver) update(ctx context.Context, key string, used bool, persistOnFailure bool) (rrs []string, err error) {
-	c := lookupGroup.DoChan(key, r.lookupFunc(ctx, key))
+	c := r.lookupGroup.DoChan(key, r.lookupFunc(ctx, key))
 	select {
 	case <-ctx.Done():
 		err = ctx.Err()
@@ -125,7 +124,7 @@ func (r *Resolver) update(ctx context.Context, key string, used bool, persistOnF
 			// If DNS request timed out for some reason, force future
 			// request to start the DNS lookup again rather than waiting
 			// for the current lookup to complete.
-			lookupGroup.Forget(key)
+			r.lookupGroup.Forget(key)
 		}
 	case res := <-c:
 		if res.Shared {
